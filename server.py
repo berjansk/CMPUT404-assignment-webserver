@@ -1,4 +1,4 @@
-import SocketServer
+import SocketServer, os
 # coding: utf-8
 
 # Copyright 2013 Abram Hindle, Eddie Antonio Santos
@@ -30,9 +30,37 @@ import SocketServer
 class MyWebServer(SocketServer.BaseRequestHandler):
     
     def handle(self):
+
+        webDir = "www"
+        absWebPath = os.path.abspath(webDir)
+
+        #define the known files we serve, and their content types
+        servedFiles = {
+            ".css" : "text/css", 
+            ".html" : "text/html"} 
+
         self.data = self.request.recv(1024).strip()
         print ("Got a request of: %s\n" % self.data)
-        self.request.sendall("OK")
+        elements = self.data.split('\n', 1)[0].split()
+
+        filePath = webDir + elements[1]
+        if filePath.endswith(('/')):
+            filePath += "index.html"        
+        absFilePath = os.path.abspath(filePath) 
+        fileName, fileExtension = os.path.splitext(absFilePath)
+        if(absWebPath in absFilePath): #Security, we don't want to be serving up system files after all
+            try:
+                    rFile = open(filePath)
+                    self.request.send("HTTP/1.1 200 OK\r\n")
+                    if(fileExtension in servedFiles.keys()):
+                        self.request.send("Content-Type: " + servedFiles[fileExtension] +"\r\n\r\n")        
+                    for line in rFile.readlines():
+                        self.request.send(line)       
+            except IOError:
+                self.request.send("HTTP/1.1 404 Not Found\r\n") #Couldn't open the file; it's dead to us.      
+        else:
+            self.request.send("HTTP/1.1 404 Not Found\r\n") #Really this should be 403 Forbidden but that doesn't pass the test cases
+
 
 if __name__ == "__main__":
     HOST, PORT = "localhost", 8080
